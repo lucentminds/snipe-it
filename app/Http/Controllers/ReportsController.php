@@ -7,6 +7,7 @@ use App\Models\Actionlog;
 use App\Models\Asset;
 use App\Models\AssetMaintenance;
 use App\Models\CustomField;
+use App\Models\Depreciation;
 use App\Models\License;
 use App\Models\Setting;
 use Carbon\Carbon;
@@ -221,11 +222,12 @@ class ReportsController extends Controller
     public function getDeprecationReport()
     {
 
+        $depreciations = Depreciation::get();
         // Grab all the assets
         $assets = Asset::with( 'assignedTo', 'assetstatus', 'defaultLoc', 'location', 'assetlog', 'company', 'model.category', 'model.depreciation')
                        ->orderBy('created_at', 'DESC')->get();
 
-        return view('reports/depreciation', compact('assets'));
+        return view('reports/depreciation', compact('assets'))->with('depreciations',$depreciations);
     }
 
     /**
@@ -492,6 +494,14 @@ class ReportsController extends Controller
             if ($request->has('location')) {
                 $header[] = trans('admin/hardware/table.location');
             }
+            if ($request->has('location_address')) {
+                $header[] = trans('general.address');
+                $header[] = trans('general.address');
+                $header[] = trans('general.city');
+                $header[] = trans('general.state');
+                $header[] = trans('general.country');
+                $header[] = trans('general.zip');
+            }
 
             if ($request->has('assigned_to')) {
                 $header[] = trans('admin/hardware/table.checkoutto');
@@ -533,6 +543,14 @@ class ReportsController extends Controller
 
             if ($request->has('updated_at')) {
                 $header[] = trans('general.updated_at');
+            }
+
+            if ($request->has('last_audit_date')) {
+                $header[] = trans('general.last_audit');
+            }
+
+            if ($request->has('next_audit_date')) {
+                $header[] = trans('general.next_audit_date');
             }
 
             if ($request->has('notes')) {
@@ -616,7 +634,7 @@ class ReportsController extends Controller
                     }
 
                     if ($request->has('category')) {
-                        $row[] = ($asset->model->category) ? $asset->model->category->name : '';
+                        $row[] = (($asset->model) && ($asset->model->category)) ? $asset->model->category->name : '';
                     }
 
                     if ($request->has('manufacturer')) {
@@ -651,6 +669,16 @@ class ReportsController extends Controller
                     if ($request->has('location')) {
                         $row[] = ($asset->location) ? $asset->location->present()->name() : '';
                     }
+
+                    if ($request->has('location_address')) {
+                        $row[] = ($asset->location) ? $asset->location->address : '';
+                        $row[] = ($asset->location) ? $asset->location->address2 : '';
+                        $row[] = ($asset->location) ? $asset->location->city : '';
+                        $row[] = ($asset->location) ? $asset->location->state : '';
+                        $row[] = ($asset->location) ? $asset->location->country : '';
+                        $row[] = ($asset->location) ? $asset->location->zip : '';
+                    }
+
 
                     if ($request->has('assigned_to')) {
                         $row[] = ($asset->checkedOutToUser() && $asset->assigned) ? e($asset->assigned->getFullNameAttribute()) : ($asset->assigned ? e($asset->assigned->display_name) : '');
@@ -707,6 +735,14 @@ class ReportsController extends Controller
 
                     if ($request->has('updated_at')) {
                         $row[] = ($asset->updated_at) ? $asset->updated_at : '';
+                    }
+
+                    if ($request->has('last_audit_date')) {
+                        $row[] = ($asset->last_audit_date) ? $asset->last_audit_date : '';
+                    }
+
+                    if ($request->has('next_audit_date')) {
+                        $row[] = ($asset->next_audit_date) ? $asset->next_audit_date : '';
                     }
 
                     if ($request->has('notes')) {

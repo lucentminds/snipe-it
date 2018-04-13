@@ -65,7 +65,7 @@ class ComponentPresenter extends Presenter
             ], [
                 "field" => "qty",
                 "searchable" => false,
-                "sortable" => false,
+                "sortable" => true,
                 "title" => trans('admin/components/general.total'),
                 "visible" => true,
             ], [
@@ -114,7 +114,7 @@ class ComponentPresenter extends Presenter
             "searchable" => false,
             "sortable" => false,
             "switchable" => true,
-            "title" => 'Checkin/Checkout',
+            "title" => trans('general.checkin').'/'.trans('general.checkout'),
             "visible" => true,
             "formatter" => "componentsInOutFormatter",
         ];

@@ -117,6 +117,12 @@
             </div>
             <div class="checkbox col-md-12">
               <label>
+                {{ Form::checkbox('location_address', '1', '1', ['class' => 'minimal']) }}
+                {{ trans('general.address') }}
+              </label>
+            </div>
+            <div class="checkbox col-md-12">
+              <label>
                 {{ Form::checkbox('assigned_to', '1', '1', ['class' => 'minimal']) }}
                 {{ trans('admin/licenses/table.assigned_to') }}
               </label>
@@ -174,6 +180,18 @@
               <label>
                 {{ Form::checkbox('updated_at', '1', '1', ['class' => 'minimal']) }}
                 {{ trans('general.updated_at') }}
+              </label>
+            </div>
+            <div class="checkbox col-md-12">
+              <label>
+                {{ Form::checkbox('last_audit_date', '1', '1', ['class' => 'minimal']) }}
+                {{ trans('general.last_audit') }}
+              </label>
+            </div>
+            <div class="checkbox col-md-12">
+              <label>
+                {{ Form::checkbox('next_audit_date', '1', '1', ['class' => 'minimal']) }}
+                {{ trans('general.next_audit_date') }}
               </label>
             </div>
             <div class="checkbox col-md-12">

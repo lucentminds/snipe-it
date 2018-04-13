@@ -219,7 +219,7 @@ class AssetsController extends Controller
 
             // Was the asset created?
         if ($asset->save()) {
-            $asset->logCreate();
+
 
             if (request('assigned_user')) {
                 $target = User::find(request('assigned_user'));
@@ -402,13 +402,6 @@ class AssetsController extends Controller
 
         $asset->delete();
 
-        $logaction = new Actionlog();
-        $logaction->item_type = Asset::class;
-        $logaction->item_id = $asset->id;
-        $logaction->created_at =  date("Y-m-d H:i:s");
-        $logaction->user_id = Auth::user()->id;
-        $logaction->logaction('deleted');
-
         return redirect()->route('hardware.index')->with('success', trans('admin/hardware/message.delete.success'));
     }
 
@@ -467,8 +460,14 @@ class AssetsController extends Controller
             $asset->location_id = ($target) ? $target->id : '';
 
         } elseif (request('checkout_to_type')=='asset') {
+
+            if (request('assigned_asset') == $assetId) {
+                return redirect()->back()->with('error', 'You cannot check an asset out to itself.');
+            }
+
             $target = Asset::where('id','!=',$assetId)->find(request('assigned_asset'));
             $asset->location_id = $target->rtd_location_id;
+
             // Override with the asset's location_id if it has one
             if ($target->location_id!='') {
                 $asset->location_id = ($target) ? $target->location_id : '';
@@ -582,6 +581,7 @@ class AssetsController extends Controller
 
             $data['log_id'] = $logaction->id;
             $data['first_name'] = get_class($target) == User::class ? $target->first_name : '';
+            $data['last_name'] = get_class($target) == User::class ? $target->last_name : '';
             $data['item_name'] = $asset->present()->name();
             $data['checkin_date'] = $logaction->created_at;
             $data['item_tag'] = $asset->asset_tag;
@@ -590,14 +590,6 @@ class AssetsController extends Controller
             $data['manufacturer_name'] = $asset->model->manufacturer->name;
             $data['model_name'] = $asset->model->name;
             $data['model_number'] = $asset->model->model_number;
-
-            if ((($asset->checkin_email()=='1')) && (isset($user)) && (!empty($user->email)) && (!config('app.lock_passwords'))) {
-                Mail::send('emails.checkin-asset', $data, function ($m) use ($user) {
-                    $m->to($user->email, $user->first_name . ' ' . $user->last_name);
-                    $m->replyTo(config('mail.reply_to.address'), config('mail.reply_to.name'));
-                    $m->subject(trans('mail.Confirm_Asset_Checkin'));
-                });
-            }
 
             if ($backto=='user') {
                 return redirect()->route("users.show", $user->id)->with('success', trans('admin/hardware/message.checkin.success'));
@@ -919,6 +911,14 @@ class AssetsController extends Controller
         if (isset($asset->id)) {
             // Restore the asset
             Asset::withTrashed()->where('id', $assetId)->restore();
+
+            $logaction = new Actionlog();
+            $logaction->item_type = Asset::class;
+            $logaction->item_id = $asset->id;
+            $logaction->created_at =  date("Y-m-d H:i:s");
+            $logaction->user_id = Auth::user()->id;
+            $logaction->logaction('restored');
+
             return redirect()->route('hardware.index')->with('success', trans('admin/hardware/message.restore.success'));
         }
         return redirect()->route('hardware.index')->with('error', trans('admin/hardware/message.does_not_exist'));
@@ -1087,7 +1087,7 @@ class AssetsController extends Controller
         
         \Log::debug($request->input('ids'));
         
-        if (($request->has('ids')) && (count($request->input('ids') > 0))) {
+        if (($request->has('ids')) && (count($request->input('ids')) > 0)) {
             $assets = $request->input('ids');
             if (($request->has('purchase_date'))
                 ||  ($request->has('purchase_cost'))
@@ -1128,9 +1128,17 @@ class AssetsController extends Controller
                     if ($request->has('warranty_months')) {
                         $update_array['warranty_months'] =  $request->input('warranty_months');
                     }
+
+
                     if ($request->has('rtd_location_id')) {
                         $update_array['rtd_location_id'] = $request->input('rtd_location_id');
+                        if (($request->has('update_real_loc'))
+                            && (($request->input('update_real_loc')) == '1'))
+                        {
+                            $update_array['location_id'] = $request->input('rtd_location_id');
+                        }
                     }
+                    
                     if ($request->has('status_id')) {
                         $update_array['status_id'] = $request->input('status_id');
                     }
@@ -1197,9 +1205,14 @@ class AssetsController extends Controller
         $user = User::find(e(Input::get('assigned_to')));
         $admin = Auth::user();
 
+        if (!$user) {
+            return redirect()->route('hardware/bulkcheckout')->withInput()->with('error', trans('admin/hardware/message.checkout.user_does_not_exist'));
+        }
+
         if (!is_array(Input::get('selected_assets'))) {
             return redirect()->route('hardware/bulkcheckout')->withInput()->with('error', trans('admin/hardware/message.checkout.no_assets_selected'));
         }
+
         $asset_ids = array_filter(Input::get('selected_assets'));
 
         if ((Input::has('checkout_at')) && (Input::get('checkout_at')!= date("Y-m-d"))) {
@@ -1214,6 +1227,7 @@ class AssetsController extends Controller
             $expected_checkin = '';
         }
 
+
         $errors = [];
         DB::transaction(function () use ($user, $admin, $checkout_at, $expected_checkin, $errors, $asset_ids) {
           
@@ -1221,6 +1235,14 @@ class AssetsController extends Controller
                 $asset = Asset::find($asset_id);
                 $this->authorize('checkout', $asset);
                 $error = $asset->checkOut($user, $admin, $checkout_at, $expected_checkin, e(Input::get('note')), null);
+
+                if ($user->location_id!='') {
+                    $asset->location_id = $user->location_id;
+                    $asset->unsetEventDispatcher();
+                    $asset->save();
+
+                }
+
 
                 if ($error) {
                     array_merge_recursive($errors, $asset->getErrors()->toArray());
@@ -1255,6 +1277,7 @@ class AssetsController extends Controller
         return view('hardware/audit')->with('asset', $asset)->with('next_audit_date', $dt)->with('locations_list');
     }
 
+
     public function auditStore(Request $request, $id)
     {
         $this->authorize('audit', Asset::class);
@@ -1270,7 +1293,11 @@ class AssetsController extends Controller
         }
 
         $asset = Asset::findOrFail($id);
+        // We don't want to log this as a normal update, so let's bypass that
+        $asset->unsetEventDispatcher();
+
         $asset->next_audit_date = $request->input('next_audit_date');
+        $asset->last_audit_date = date('Y-m-d h:i:s');
 
         if ($asset->save()) {
             $asset->logAudit(request('note'), request('location_id'));
